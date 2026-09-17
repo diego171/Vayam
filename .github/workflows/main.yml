@@ -17,29 +17,63 @@ jobs:
 
       - name: Extraer proyecto
         run: |
+          rm -rf proyecto
+          mkdir proyecto
           unzip -o 1.zip -d proyecto
-          echo "Contenido extraído:"
-          find proyecto -maxdepth 3 -type f | sort
 
-      - name: Preparar proyecto Android
+          echo "=== Archivos extraídos ==="
+          find proyecto -maxdepth 5 -type f | sort
+
+      - name: Localizar proyecto Android
         run: |
-          rm -rf app build.gradle settings.gradle gradle.properties
+          echo "=== Buscando settings.gradle ==="
 
-          if [ -f "proyecto/settings.gradle" ]; then
-            cp -r proyecto/. .
-          else
-            ROOT=$(dirname "$(find proyecto -name settings.gradle -type f | head -1)")
-            echo "Proyecto encontrado en: $ROOT"
-            cp -r "$ROOT"/. .
+          SETTINGS=$(find proyecto -type f -name "settings.gradle" | head -1)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "ERROR: No se encontró settings.gradle"
+            exit 1
           fi
 
-          echo "Contenido final del proyecto:"
+          ROOT=$(dirname "$SETTINGS")
+
+          echo "Proyecto encontrado en: $ROOT"
+
+          echo "=== Contenido del proyecto ==="
+          ls -la "$ROOT"
+
+          echo "=== Preparando proyecto ==="
+
+          rm -rf app
+          rm -f build.gradle
+          rm -f settings.gradle
+          rm -f gradle.properties
+
+          cp -r "$ROOT"/. .
+
+          echo "=== Contenido final ==="
           ls -la
 
-          echo "Verificando archivos:"
-          test -f settings.gradle
-          test -f build.gradle
-          test -f app/build.gradle
+          echo "=== Verificando archivos ==="
+
+          test -f settings.gradle || {
+            echo "ERROR: Falta settings.gradle"
+            exit 1
+          }
+
+          test -f build.gradle || {
+            echo "ERROR: Falta build.gradle"
+            exit 1
+          }
+
+          test -f app/build.gradle || {
+            echo "ERROR: Falta app/build.gradle"
+            exit 1
+          }
+
+          echo "✓ settings.gradle encontrado"
+          echo "✓ build.gradle encontrado"
+          echo "✓ app/build.gradle encontrado"
 
       - name: Configurar Java
         uses: actions/setup-java@v4
@@ -55,7 +89,10 @@ jobs:
       - name: Instalar SDK Android
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -66,14 +103,17 @@ jobs:
 
       - name: Compilar APK
         run: |
-          echo "Compilando APK..."
+          echo "=== INICIANDO COMPILACIÓN ==="
           gradle :app:assembleDebug --stacktrace
 
       - name: Verificar APK
         run: |
-          echo "APK generado:"
+          echo "=== APK GENERADO ==="
           ls -lh app/build/outputs/apk/debug/app-debug.apk
+
           test -f app/build/outputs/apk/debug/app-debug.apk
+
+          echo "✓ APK generado correctamente"
 
       - name: Guardar APK
         uses: actions/upload-artifact@v4
