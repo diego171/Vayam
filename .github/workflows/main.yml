@@ -1,0 +1,83 @@
+name: Compilar APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Extraer proyecto
+        run: |
+          unzip -o 1.zip -d proyecto
+          echo "Contenido extraído:"
+          find proyecto -maxdepth 3 -type f | sort
+
+      - name: Preparar proyecto Android
+        run: |
+          rm -rf app build.gradle settings.gradle gradle.properties
+
+          if [ -f "proyecto/settings.gradle" ]; then
+            cp -r proyecto/. .
+          else
+            ROOT=$(dirname "$(find proyecto -name settings.gradle -type f | head -1)")
+            echo "Proyecto encontrado en: $ROOT"
+            cp -r "$ROOT"/. .
+          fi
+
+          echo "Contenido final del proyecto:"
+          ls -la
+
+          echo "Verificando archivos:"
+          test -f settings.gradle
+          test -f build.gradle
+          test -f app/build.gradle
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+
+      - name: Instalar SDK Android
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Limpiar proyecto
+        run: |
+          gradle clean --stacktrace
+
+      - name: Compilar APK
+        run: |
+          echo "Compilando APK..."
+          gradle :app:assembleDebug --stacktrace
+
+      - name: Verificar APK
+        run: |
+          echo "APK generado:"
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          test -f app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Guardar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reporte-de-Unidad-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
